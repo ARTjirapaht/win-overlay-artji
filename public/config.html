@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"/>
+  <title>Win-Overlay-Artji — Control Panel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --bg:#0c1016;
+      --ink:#f5f7fb;
+      --muted:#aab1b8;
+      --line:rgba(255,255,255,.12);
+      --glass:rgba(255,255,255,.06);
+      --ok:#22c55e; --bad:#ef4444;
+      --rad:14px; --gap:10px; --pad:12px;
+      --colw: 340px;      /* ความกว้างคอลัมน์ */
+      --maxw: 1120px;     /* ความกว้างรวม */
+      --tileH: auto;      /* ⬅️ ความสูงของทุกบล็อก (จะถูกตั้งเป็นค่า WIN แบบอัตโนมัติ) */
+    }
+    *{ box-sizing:border-box }
+    html,body{ height:100% }
+    body{
+      margin:0; font-family:'Kanit',sans-serif; color:var(--ink);
+      background:
+        radial-gradient(900px 480px at 10% -20%, rgba(110,231,249,.18), transparent 60%),
+        radial-gradient(900px 480px at 110% 120%, rgba(192,132,252,.15), transparent 60%),
+        linear-gradient(120deg, #0b0f14, #0f1218 40%, #0b0f14);
+      padding:14px 16px;
+      overflow-y:auto;
+    }
+    
+
+    .brand{
+      display:flex; align-items:center; gap:12px;
+      border:1px solid var(--line); background:var(--glass);
+      padding:10px 12px; border-radius:var(--rad);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 36px rgba(0,0,0,.28);
+      max-width: var(--maxw); margin: 0 auto var(--gap) auto;
+    }
+    .logo{ width:48px; height:48px; border-radius:50%; overflow:hidden; flex:0 0 48px;
+      border:1px solid rgba(255,255,255,.28);
+      box-shadow:0 0 0 2px rgba(255,255,255,.06) inset, 0 8px 26px rgba(0,0,0,.28);
+    }
+    .logo img{ width:100%; height:100%; object-fit:cover; display:block }
+    .title{ display:flex; flex-direction:column; }
+    .name{ font-size:18px } .sub{ font-size:11px; color:var(--muted) }
+    .badge{ margin-left:auto; font-size:11px; padding:5px 9px; border-radius:999px;
+      background:linear-gradient(135deg, rgba(110,231,249,.22), rgba(192,132,252,.22));
+      border:1px solid var(--line);
+    }
+
+    .grid{
+      max-width: var(--maxw); margin:0 auto;
+      display:grid; gap:var(--gap);
+      grid-template-columns: repeat(3, 1fr); /* 3 คอลัมน์แน่น ๆ */
+      align-items:start;
+    }
+
+    /* การ์ดทุกใบจะ “สูงเท่ากัน” ด้วย min-height ที่อ่านจาก --tileH */
+    .tile{
+      position:relative;
+      background:var(--glass); border:1px solid var(--line);
+      border-radius:var(--rad);
+      padding:var(--pad);
+      display:flex; flex-direction:column; gap:8px;
+      min-height: var(--tileH);     /* ⬅️ ตรงนี้แหละสำคัญ */
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 36px rgba(0,0,0,.28);
+    }
+    .tile h3{ margin:0; font-size:15px; display:flex; gap:8px; align-items:center }
+    .tile .hint{ font-size:12px; color:var(--muted) }
+
+    label{ font-size:12px; color:var(--muted); display:block; margin-bottom:4px }
+    input[type="number"], input[type="color"], input[type="range"]{
+      width:100%; padding:8px 10px; font:inherit; color:var(--ink);
+      border-radius:10px; border:1px solid var(--line); background:rgba(255,255,255,0.05); outline:none;
+    }
+    .row{ display:grid; gap:8px; grid-template-columns: 1fr 1fr }
+
+    .btn{
+      padding:8px 10px; border-radius:10px; border:1px solid var(--line);
+      background: rgba(255,255,255,.06); color:var(--ink); cursor:pointer;
+      transition: transform .06s ease, background .2s;
+    }
+    .btn:hover{ background: rgba(255,255,255,.10) }
+    .btn:active{ transform: translateY(1px) }
+    .btn.primary{ border-color: rgba(110,231,249,.45) }
+    .btn.good{ border-color: rgba(34,197,94,.45) }
+    .btn.bad{  border-color: rgba(239,68,68,.45) }
+    .btn.copy{ border-color: rgba(192,132,252,.45) }
+
+    .switch{ position:relative; width:48px; height:28px; border-radius:999px; background: rgba(255,255,255,.1); border:1px solid var(--line); cursor:pointer; display:inline-block }
+    .switch input{ display:none }
+    .knob{ position:absolute; top:2px; left:2px; width:24px; height:24px; border-radius:50%; background:#fff; transition: transform .18s }
+    .switch input:checked + .knob{ transform: translateX(20px) }
+
+    .iframe-wrap{
+      height: 200px;  /* ปรับได้ตามต้องการ — จะถูกบีบให้อยู่ในความสูงรวม */
+      border-radius:12px; overflow:hidden; border:1px dashed var(--line);
+      background: rgba(0,0,0,.22);
+      flex: 1;       /* ช่วยดันให้เต็มพื้นที่ที่เหลือ */
+    }
+    .iframe-wrap iframe{ width:100%; height:100%; border:0; display:block; background:transparent }
+
+    .status{ font-size:12px; color:var(--muted) }
+    .ok{ color:var(--ok) } .err{ color:var(--bad) }
+
+    .btn[disabled]{ opacity:.45; cursor:not-allowed }
+
+
+
+
+    .license{
+      grid-column: 1 / -1;
+      border:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(239,68,68,.12), rgba(239,68,68,.06));
+      color:#ffd4d4; padding:10px 12px; border-radius:var(--rad);
+      display:flex; gap:8px; align-items:flex-start;
+      min-height: auto; /* กล่อง License ไม่บังคับเท่าคนอื่น (ให้เตี้ยได้) */
+    }
+
+
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+      :root{ --maxw: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <section class="brand">
+    <div class="logo">
+      <img src="https://media.discordapp.net/attachments/1277323066543968488/1279813629293760663/09.jpg?ex=68e3d553&is=68e283d3&hm=a1353f978ff1df8fd9a50f55fb746d1627c54cf4c5630e44923c8f0c9866cc71&=&format=webp&width=960&height=960" alt="logo"/>
+    </div>
+    <div class="title">
+      <div class="name">Win-Overlay-Artji</div>
+      <div class="sub">Compact Grid • Overlay Manager</div>
+    </div>
+    <span class="badge">v1</span>
+  </section>
+
+  <section class="grid">
+    <!-- 🎯 ใช้ id="tile-win" เป็น “ตัวอ้างอิงความสูงมาตรฐาน” -->
+    <div class="tile" id="tile-win">
+      <h3>🎯 ค่า WIN</h3>
+      <div>
+        <label>วินปัจจุบัน (ติดลบได้)</label>
+        <input id="currentInput" type="number" step="1"/>
+      </div>
+      <div>
+        <label>Max Win</label>
+        <input id="maxWinInput" type="number" min="1" step="1"/>
+      </div>
+      <div style="margin-top:auto; display:flex; gap:8px; align-items:center">
+        <button id="saveBtn" class="btn primary">💾 บันทึก</button>
+        <span id="status" class="status"></span>
+      </div>
+    </div>
+
+    <div class="tile">
+      <h3>🧩 สไตล์กล่อง</h3>
+      <div class="row">
+        <div>
+          <label>Stroke Size (px)</label>
+          <input id="strokeSize" type="range" min="0" max="12" step="1"/>
+        </div>
+        <div>
+          <label>Stroke Color</label>
+          <input id="strokeColor" type="color"/>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; margin-top:6px">
+        <label class="switch"><input id="bgSwitch" type="checkbox"><span class="knob"></span></label>
+        <span class="status">พื้นหลังกล่อง (เปิด/ปิด)</span>
+      </div>
+    </div>
+
+    <div class="tile">
+      <h3>🕹️ ควบคุมแบบจำนวน</h3>
+      <div>
+        <label>ขั้น (จำนวน)</label>
+        <input id="stepInput" type="number" value="1" step="1"/>
+      </div>
+      <div style="display:flex; gap:8px">
+        <button id="btnMinus" class="btn bad">– ลด WIN</button>
+        <button id="btnPlus"  class="btn good">+ เพิ่ม WIN</button>
+      </div>
+    </div>
+
+    <div class="tile">
+      <h3>🔗 TikFinity Webhook</h3>
+      <div>
+        <label>จำนวน (step)</label>
+        <input id="webhookStep" type="number" value="5" min="1" step="1"/>
+      </div>
+      <div style="display:flex; gap:8px">
+        <button id="copyMinusWebhook" class="btn copy">📋 ลิงก์ – ลด</button>
+        <button id="copyPlusWebhook"  class="btn copy">📋 ลิงก์ + เพิ่ม</button>
+      </div>
+      <div id="webhookPreview" class="status" style="white-space:pre-wrap; margin-top:4px"></div>
+    </div>
+
+    <div class="tile">
+      <h3>👀 พรีวิว Overlay</h3>
+      <div class="iframe-wrap">
+        <iframe id="previewFrame" src="/overlay.html?mute=1" allow="autoplay"></iframe>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:6px">
+        <button class="btn" id="copyBtn">📋 คัดลอก URL Overlay</button>
+        <span class="status" id="copyStatus"></span>
+      </div>
+    </div>
+
+    <!-- บล็อก: Presets & Lock -->
+    <div class="tile" id="tile-presets">
+      <h3>⚡ Presets & Lock</h3>
+
+      <div class="row">
+        <div>
+          <label>ค่าสำเร็จรูป A</label>
+          <input id="presetA" type="number" value="5" step="1"/>
+        </div>
+        <div>
+          <label>ค่าสำเร็จรูป B</label>
+          <input id="presetB" type="number" value="10" step="1"/>
+        </div>
+      </div>
+
+      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:6px">
+        <button class="btn" id="btnM5">–5</button>
+        <button class="btn" id="btnP5">+5</button>
+        <button class="btn" id="btnM10">–10</button>
+        <button class="btn" id="btnP10">+10</button>
+        <button class="btn" id="btnAminus">–A</button>
+        <button class="btn" id="btnAplus">+A</button>
+        <button class="btn" id="btnBminus">–B</button>
+        <button class="btn" id="btnBplus">+B</button>
+      </div>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px">
+        <button class="btn bad"    id="btnReset">รีเซ็ต = 0</button>
+        <button class="btn good"   id="btnSetMax">ตั้งเป็น Max</button>
+        <button class="btn copy"   id="btnCopyReset">📋 ลิงก์รีเซ็ต</button>
+        <button class="btn copy"   id="btnCopySetMax">📋 ลิงก์ตั้งเป็น Max</button>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px; margin-top:10px">
+        <label class="switch">
+          <input id="lockToggle" type="checkbox"><span class="knob"></span>
+        </label>
+        <span class="status">ล็อกปุ่มควบคุม (กันกดพลาด)</span>
+      </div>
+    </div>
+
+
+
+    <div class="license tile">
+      <div>🔒</div>
+      <div>
+        <b>สิทธิ์การใช้งาน:</b>
+        ซอฟต์แวร์นี้อนุญาตให้ใช้ <b>เฉพาะภายในสังกัด Critical Agency เท่านั้น</b> ห้ามแจกจ่าย เผยแพร่ จำหน่าย
+        หรือโอนสิทธิ์ให้บุคคลภายนอกโดยไม่ได้รับอนุญาตเป็นลายลักษณ์อักษร
+      </div>
+    </div>
+  </section>
+
+  <script>
+  const TOKEN = 'artjiraphatjtt';
+  const APP   = 'winoverlay';
+  const $ = id => document.getElementById(id);
+
+  const currentEl = $('currentInput');
+  const maxEl     = $('maxWinInput');
+  const bgSwitch  = $('bgSwitch');
+  const strokeSizeEl  = $('strokeSize');
+  const strokeColorEl = $('strokeColor');
+  const statusEl  = $('status');
+  const saveBtn   = $('saveBtn');
+
+  const stepEl    = $('stepInput');
+  const btnPlus   = $('btnPlus');
+  const btnMinus  = $('btnMinus');
+
+  const webhookStep = $('webhookStep');
+  const copyMinusWebhook = $('copyMinusWebhook');
+  const copyPlusWebhook  = $('copyPlusWebhook');
+  const webhookPreview   = $('webhookPreview');
+
+  const copyBtn   = $('copyBtn');
+  const copyStatusEl = $('copyStatus');
+
+  // ==== Presets & Lock (ต้องมีการ์ดที่ให้ id ตามนี้ใน HTML ถึงจะทำงาน) ====
+  const presetA   = $('presetA');
+  const presetB   = $('presetB');
+
+  const btnM5     = $('btnM5');
+  const btnP5     = $('btnP5');
+  const btnM10    = $('btnM10');
+  const btnP10    = $('btnP10');
+  const btnAminus = $('btnAminus');
+  const btnAplus  = $('btnAplus');
+  const btnBminus = $('btnBminus');
+  const btnBplus  = $('btnBplus');
+
+  const btnReset      = $('btnReset');
+  const btnSetMax     = $('btnSetMax');
+  const btnCopyReset  = $('btnCopyReset');
+  const btnCopySetMax = $('btnCopySetMax');
+
+  const lockToggle = $('lockToggle');
+
+  // รวมปุ่มที่ควรถูกล็อก (ถ้าไม่มี element ใด ก็ filter ทิ้ง)
+  const lockTargets = [
+    btnMinus, btnPlus, saveBtn,
+    btnM5, btnP5, btnM10, btnP10,
+    btnAminus, btnAplus, btnBminus, btnBplus,
+    btnReset, btnSetMax
+  ].filter(Boolean);
+
+  function setLocked(on){
+    lockTargets.forEach(b => b.disabled = !!on);
+  }
+  lockToggle?.addEventListener('change', ()=> setLocked(lockToggle.checked));
+
+  // --- ทำให้ทุกบล็อกสูงเท่ากับ 🎯 ค่า WIN ---
+  function equalizeTileHeights(){
+    const winTile = document.getElementById('tile-win');
+    if (!winTile) return;
+    const h = winTile.getBoundingClientRect().height;
+    document.documentElement.style.setProperty('--tileH', Math.ceil(h) + 'px');
+  }
+  window.addEventListener('load', equalizeTileHeights);
+  window.addEventListener('resize', ()=> { requestAnimationFrame(equalizeTileHeights); });
+
+  // โหลดค่าเริ่มต้น
+  (async function init(){
+    try {
+      const cfg = await (await fetch('/api/config', { cache: 'no-store' })).json();
+      syncToForm(cfg);
+      setStatus('🟢 โหลดตั้งค่าแล้ว', true);
+      renderWebhookPreview();
+    } catch {
+      setStatus('❌ โหลดตั้งค่าไม่สำเร็จ', false);
+    } finally {
+      equalizeTileHeights();
+    }
+  })();
+
+  // ฟัง WS เพื่อ sync ฟอร์มแบบสด
+  (function wsConfig(){
+    const host = location.hostname || 'localhost';
+    const ws = new WebSocket(`ws://${host}:8080`);
+    ws.onmessage = (e)=>{
+      try{
+        const obj = JSON.parse(e.data);
+        if (obj?.type === 'state') {
+          syncToForm(obj.data || {});
+          equalizeTileHeights();
+        }
+      }catch{}
+    };
+    ws.onclose = ()=> setTimeout(wsConfig, 1500);
+  })();
+
+  function syncToForm(s){
+    if (Number.isFinite(s.current)) currentEl.value = s.current;
+    if (Number.isFinite(s.maxWin))  maxEl.value     = s.maxWin;
+    if (typeof s.showBg === 'boolean') bgSwitch.checked = !!s.showBg;
+    if (Number.isFinite(s.strokeWidth)) strokeSizeEl.value = s.strokeWidth;
+    if (s.strokeColor) strokeColorEl.value = s.strokeColor;
+  }
+
+  function setStatus(msg, ok){
+    statusEl.textContent = msg;
+    statusEl.className = 'status ' + (ok ? 'ok' : 'err');
+    if (ok) setTimeout(()=>{ statusEl.textContent=''; }, 1200);
+  }
+
+  // ปุ่ม "บันทึก"
+  saveBtn?.addEventListener('click', async ()=>{
+    const body = {
+      current: Number.parseInt(currentEl.value,10),
+      maxWin:  Math.max(1, Number.parseInt(maxEl.value,10)),
+      showBg: bgSwitch.checked,
+      strokeWidth: Number.parseInt(strokeSizeEl.value,10),
+      strokeColor: strokeColorEl.value
+    };
+    try{
+      const res = await fetch('/api/config', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      });
+      setStatus(res.ok ? '✅ บันทึกเรียบร้อย' : '❌ บันทึกล้มเหลว', res.ok);
+    }catch{
+      setStatus('❌ บันทึกล้มเหลว', false);
+    } finally {
+      equalizeTileHeights();
+    }
+  });
+
+  // ปุ่ม +/- ยิง webhook ในเครื่อง
+  btnPlus?.addEventListener('click', ()=> sendWebhook('win_plus', stepEl));
+  btnMinus?.addEventListener('click', ()=> sendWebhook('win_minus', stepEl));
+
+  async function sendWebhook(action, stepInput){
+    const n = Math.max(1, Number.parseInt(stepInput.value,10) || 1);
+    const payload = `${TOKEN}:${APP}:${action}:${n}`;
+    const url = `/hook/${encodeURIComponent(payload)}`;
+    try{
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP '+res.status);
+      setStatus(`✅ ${action==='win_plus'?'เพิ่ม':'ลด'} ${n}`, true);
+    }catch(e){
+      setStatus('❌ ยิง webhook ไม่สำเร็จ', false);
+    }
+  }
+
+  // Webhook (copy ใช้กับ TikFinity)
+  function buildWebhook(action){
+    const base = location.origin.replace(/\/+$/,'');
+    const n = Math.max(1, Number.parseInt(webhookStep.value,10) || 1);
+    const payload = `${TOKEN}:${APP}:${action}:${n}`;
+    return `${base}/hook/${encodeURIComponent(payload)}`;
+  }
+  function renderWebhookPreview(){
+    if (!webhookPreview) return;
+    webhookPreview.textContent =
+      `ตัวอย่างลิงก์:
+– ${buildWebhook('win_minus')}
++ ${buildWebhook('win_plus')}`;
+  }
+  async function copyText(s){
+    await navigator.clipboard.writeText(s);
+    if (webhookPreview){
+      webhookPreview.textContent = '✅ คัดลอกแล้ว: ' + s;
+      setTimeout(renderWebhookPreview, 1200);
+    }
+  }
+  webhookStep?.addEventListener('input', renderWebhookPreview);
+  copyMinusWebhook?.addEventListener('click', ()=> copyText(buildWebhook('win_minus')));
+  copyPlusWebhook?.addEventListener('click', ()=> copyText(buildWebhook('win_plus')));
+
+  // คัดลอก URL overlay
+  copyBtn?.addEventListener('click', async ()=>{
+    const url = location.origin + '/overlay.html';
+    await navigator.clipboard.writeText(url);
+    if (copyStatusEl){
+      copyStatusEl.textContent = 'คัดลอกแล้ว: '+url;
+      setTimeout(()=> copyStatusEl.textContent = '', 1200);
+    }
+  });
+
+  // ====== Presets & Lock: actions ======
+  async function fireStep(delta){
+    if (lockToggle?.checked) return;
+    const action = delta >= 0 ? 'win_plus' : 'win_minus';
+    const n = Math.abs(delta) || 1;
+    const payload = `${TOKEN}:${APP}:${action}:${n}`;
+    const url = `/hook/${encodeURIComponent(payload)}`;
+    try{
+      const res = await fetch(url);
+      if (!res.ok) throw 0;
+      setStatus(`✅ ${delta>=0?'+':'−'}${n}`, true);
+    }catch{ setStatus('❌ ยิง webhook ไม่สำเร็จ', false); }
+  }
+
+  async function fireSetCurrent(n){
+    if (lockToggle?.checked) return;
+    const payload = `${TOKEN}:${APP}:set_current:${n}`;
+    try{
+      const res = await fetch(`/hook/${encodeURIComponent(payload)}`);
+      if (!res.ok) throw 0;
+      setStatus(`✅ ตั้งค่า WIN = ${n}`, true);
+    }catch{ setStatus('❌ ตั้งค่าไม่สำเร็จ', false); }
+  }
+
+  async function fireSetMax(){
+    if (lockToggle?.checked) return;
+    try{
+      const cfg = await (await fetch('/api/config', {cache:'no-store'})).json();
+      const n = Number.isFinite(cfg.maxWin) ? cfg.maxWin : 0;
+      await fireSetCurrent(n);
+    }catch{ setStatus('❌ อ่านค่า Max ไม่ได้', false); }
+  }
+
+  // ผูกปุ่ม (มีเช็คว่ามี element จริงก่อน)
+  btnM5    ?.addEventListener('click', ()=> fireStep(-5));
+  btnP5    ?.addEventListener('click', ()=> fireStep(+5));
+  btnM10   ?.addEventListener('click', ()=> fireStep(-10));
+  btnP10   ?.addEventListener('click', ()=> fireStep(+10));
+  btnAminus?.addEventListener('click', ()=> fireStep(- Math.max(1, parseInt(presetA?.value||'1',10))));
+  btnAplus ?.addEventListener('click', ()=> fireStep(+ Math.max(1, parseInt(presetA?.value||'1',10))));
+  btnBminus?.addEventListener('click', ()=> fireStep(- Math.max(1, parseInt(presetB?.value||'1',10))));
+  btnBplus ?.addEventListener('click', ()=> fireStep(+ Math.max(1, parseInt(presetB?.value||'1',10))));
+  btnReset ?.addEventListener('click', ()=> fireSetCurrent(0));
+  btnSetMax?.addEventListener('click', fireSetMax);
+
+  // คัดลอกลิงก์ reset / set max
+  function buildSetCurrentLink(n){
+    const base = location.origin.replace(/\/+$/,'');
+    const payload = `${TOKEN}:${APP}:set_current:${n}`;
+    return `${base}/hook/${encodeURIComponent(payload)}`;
+  }
+  btnCopyReset ?.addEventListener('click', async ()=>{
+    const url = buildSetCurrentLink(0);
+    await navigator.clipboard.writeText(url);
+    setStatus('✅ คัดลอกลิงก์รีเซ็ตแล้ว', true);
+  });
+  btnCopySetMax?.addEventListener('click', async ()=>{
+    try{
+      const cfg = await (await fetch('/api/config', {cache:'no-store'})).json();
+      const n = Number.isFinite(cfg.maxWin) ? cfg.maxWin : 0;
+      const url = buildSetCurrentLink(n);
+      await navigator.clipboard.writeText(url);
+      setStatus('✅ คัดลอกลิงก์ตั้งเป็น Max แล้ว', true);
+    }catch{
+      setStatus('❌ คัดลอกลิงก์ตั้งเป็น Max ไม่สำเร็จ', false);
+    }
+  });
+</script>
+
+</body>
+</html>

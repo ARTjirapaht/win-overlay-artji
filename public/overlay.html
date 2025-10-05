@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"/>
+  <!-- ฟอนต์พื้นฐาน (แก้/เพิ่มตามต้องการ) -->
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@700&display=swap" rel="stylesheet"/>
+  <style>
+    :root{
+      --stroke-size: 2;          /* px (จะไปเป็น stroke-width ของ SVG) */
+      --stroke-color: #000000;
+    }
+    body{
+      margin:0; background:transparent;
+      font-family:'Kanit',sans-serif; font-size:48px; color:#fff; text-align:center; font-weight:700;
+    }
+    #status{ font-size:18px; color:#bdbdbd; margin-top:12px; transition:opacity .5s; }
+
+    /* กล่องแสดงผล + glass */
+    #counter{
+      display:inline-flex; align-items:center; gap:3px;
+      padding:0px 10px; border-radius:10px;
+      background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(255,255,255,0.14);
+    }
+    /* ปิดพื้นหลังเมื่อ showBg=false */
+    #counter.no-bg{
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+      backdrop-filter: none;
+    }
+
+    /* SVG texts */
+    .svgwrap{ display:inline-flex; align-items:center }
+    svg.dtxt{ display:block; height:1em; width:auto; }
+    .dtxt-text{
+      paint-order: stroke fill;    /* stroke อยู่ข้างหลัง → ดูเหมือนสโตรกออกนอก */
+      stroke-linejoin: round;
+      font-weight: 700;
+    }
+
+    /* Animation */
+    @keyframes bumpUp { 0%{transform:scale(1)} 30%{transform:scale(1.1)} 100%{transform:scale(1)} }
+    @keyframes shakeDown {
+      0%,100%{ transform: translateX(0); }
+      20%{ transform: translateX(-6px); }
+      40%{ transform: translateX(6px); }
+      60%{ transform: translateX(-4px); }
+      80%{ transform: translateX(3px); }
+    }
+    .up-anim   { animation: bumpUp .25s ease-out; }
+    .down-anim { animation: shakeDown .25s ease-in-out; }
+  </style>
+</head>
+<body class="theme-default">
+  <div id="counter">
+    <span class="svgwrap">
+      <!-- current -->
+      <svg id="numSvg" class="dtxt" xmlns="http://www.w3.org/2000/svg">
+        <text id="numText" class="dtxt-text" x="0" y="0">0</text>
+      </svg>
+    </span>
+    <span class="svgwrap">
+      <!-- slash -->
+      <svg id="slashSvg" class="dtxt" xmlns="http://www.w3.org/2000/svg">
+        <text id="slashText" class="dtxt-text" x="0" y="0">/</text>
+      </svg>
+    </span>
+    <span class="svgwrap">
+      <!-- max -->
+      <svg id="maxSvg" class="dtxt" xmlns="http://www.w3.org/2000/svg">
+        <text id="maxText" class="dtxt-text" x="0" y="0">10</text>
+      </svg>
+    </span>
+  </div>
+
+  <div id="status">🔄 กำลังเชื่อมต่อ...</div>
+
+  <!-- เสียง -->
+  <audio id="sndPlus"  src="plus.mp3"  preload="auto"></audio>
+  <audio id="sndMinus" src="minus.mp3" preload="auto"></audio>
+
+  <script>
+    const counter  = document.getElementById('counter');
+    const statusEl = document.getElementById('status');
+
+    // 3 ส่วนที่จะวาดด้วย SVG ให้ stroke ครบทุกตัวอักษร
+    const numSvg   = document.getElementById('numSvg');
+    const numText  = document.getElementById('numText');
+    const slashSvg = document.getElementById('slashSvg');
+    const slashText= document.getElementById('slashText');
+    const maxSvg   = document.getElementById('maxSvg');
+    const maxText  = document.getElementById('maxText');
+
+    const sndPlus  = document.getElementById('sndPlus');
+    const sndMinus = document.getElementById('sndMinus');
+
+    // รองรับ query ?mute=1 (ปิดเสียงตอนพรีวิวใน iframe)
+    const params = new URLSearchParams(location.search);
+    const muted = params.get('mute') === '1';
+    if (muted) { sndPlus.muted = true; sndMinus.muted = true; }
+
+    let current = 0;
+    let maxWin  = 10;
+
+    // ค่ากราฟิก
+    let strokeW = 2;
+    let strokeC = '#000000';
+    let currFont = getComputedStyle(document.body).fontFamily;
+
+    // ====== ถ้าจะ “เพิ่มฟอนต์เอง” ให้ inject <link> CSS ที่นี่ ======
+    // ตัวอย่าง:
+    // (function injectCustomFont(){
+    //   const link = document.createElement('link');
+    //   link.rel = 'stylesheet';
+    //   link.href = 'https://fonts.googleapis.com/css2?family=Mitr:wght@700&display=swap';
+    //   document.head.appendChild(link);
+    //   currFont = "'Mitr', sans-serif"; // ตั้งฟอนต์ที่จะใช้
+    // })();
+    // ===============================================================
+
+    function drawTextToSvg(svg, textNode, str, color='#ffffff') {
+      textNode.textContent = String(str);
+      textNode.setAttribute('fill', color);
+      textNode.setAttribute('stroke', strokeC);
+      textNode.setAttribute('stroke-width', String(strokeW));
+      textNode.style.fontFamily = currFont;
+
+      const px = parseFloat(getComputedStyle(document.body).fontSize) || 48;
+      textNode.style.fontSize = px + 'px';
+
+      // คำนวณ viewBox ให้รอบสโตรก
+      const pad = Math.max(2, strokeW * 1.5);
+      // ใช้ baseline แบบ “hanging” แล้ววัด
+      textNode.setAttribute('dominant-baseline', 'hanging');
+      const bbox = textNode.getBBox();
+      const x = bbox.x - pad;
+      const y = bbox.y - pad;
+      const w = Math.max(1, bbox.width  + pad * 2);
+      const h = Math.max(1, bbox.height + pad * 2);
+      svg.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
+      svg.style.height = '1em';
+      svg.style.width  = (w / h) + 'em';
+    }
+
+    function renderAll(){
+      drawTextToSvg(numSvg,   numText,  current, current < 0 ? '#ff3b3b' : '#ffffff');
+      drawTextToSvg(slashSvg, slashText, '/');
+      drawTextToSvg(maxSvg,   maxText,  maxWin);
+    }
+
+    function applyState(s){
+      if (Number.isFinite(s.current)) current = s.current;
+      if (Number.isFinite(s.maxWin))  maxWin  = s.maxWin;
+      if (typeof s.font === 'string') currFont = s.font;
+      if (typeof s.showBg === 'boolean') counter.classList.toggle('no-bg', !s.showBg);
+      if (Number.isFinite(s.strokeWidth)) strokeW = s.strokeWidth;
+      if (typeof s.strokeColor === 'string') strokeC = s.strokeColor;
+      renderAll();
+    }
+
+    function updateVisual(diff){
+      if (!muted) {
+        if (diff > 0) { sndPlus.currentTime = 0; sndPlus.play().catch(()=>{}); }
+        else if (diff < 0) { sndMinus.currentTime = 0; sndMinus.play().catch(()=>{}); }
+      }
+      if (diff > 0) { counter.classList.add('up-anim');   setTimeout(()=>counter.classList.remove('up-anim'), 260); }
+      else if (diff < 0) { counter.classList.add('down-anim'); setTimeout(()=>counter.classList.remove('down-anim'), 260); }
+      renderAll();
+    }
+
+    function connectWS(){
+      const ws = new WebSocket(`ws://${location.hostname||'localhost'}:8080`);
+
+      ws.onopen = ()=>{
+        statusEl.textContent = '🟢 เชื่อมต่อแล้ว';
+        statusEl.style.opacity = 1;
+        setTimeout(()=> statusEl.style.opacity = 0, 2000);
+      };
+
+      ws.onmessage = (e)=>{
+        try{
+          const obj = JSON.parse(e.data);
+          if (obj?.type === 'state') {
+            const s = obj.data || {};
+            const prev = current;
+            applyState(s);
+            updateVisual(current - prev);
+            return;
+          }
+        }catch{}
+        // fallback แบบ string
+        const msg = e.data||'';
+        const prev = current;
+        if (msg === 'win_plus')  current++;
+        else if (msg === 'win_minus') current--;
+        else if (msg.startsWith('maxwin:')) maxWin = parseInt(msg.split(':')[1],10);
+        else if (msg.startsWith('current:')) current = parseInt(msg.split(':')[1],10);
+        updateVisual(current - prev);
+      };
+
+      ws.onclose = ()=>{
+        statusEl.textContent = '🔁 พยายามเชื่อมต่อใหม่...';
+        statusEl.style.opacity = 1;
+        setTimeout(connectWS, 1500);
+      };
+    }
+
+    // เริ่มทำงาน
+    renderAll();
+    connectWS();
+    window.addEventListener('resize', renderAll);
+  </script>
+</body>
+</html>

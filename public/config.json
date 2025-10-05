@@ -1,0 +1,10 @@
+{
+  "maxWin": 10,
+  "current": 10,
+  "theme": "theme-default",
+  "font": "'Kanit', sans-serif",
+  "fontUrl": "",
+  "showBg": true,
+  "strokeWidth": 0,
+  "strokeColor": "#000000"
+}
